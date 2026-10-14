@@ -7,15 +7,21 @@ WHAT THIS IS
   device its own save-sync settings, so they no longer share one RomM device
   registration, one save-folder mapping or one set of save slots.
 
+  This is an unofficial build. It is not made, endorsed or supported by the
+  Grout, RomM or spruceOS projects. Please report problems with it at
+  https://github.com/theycallmeboxy/grout-mosaic-patch/issues, not to them.
+
 REQUIREMENTS
   - spruceOS with stock Grout {{VERSION}} already installed on the card.
-  - Do not use a zip built for a different Grout version. Only the binaries
-    are replaced, so they must match your stock launch.sh and libraries.
+  - Do not use a zip built for a different Grout version. Only the program
+    files are replaced, so they must match your stock launch.sh and
+    libraries.
 
 INSTALL
   1. Back up App/Grout/grout/config.json and save_slots.json.
   2. Extract this zip to the SD card root.
-  3. Overwrite when asked. It only replaces grout64 and grout32.
+  3. Overwrite when asked. It replaces grout64 and grout32, plus Grout's
+     LICENSE file with the same text, and adds THIRD-PARTY-NOTICES.txt.
   4. Optional: delete README.txt from the card root afterwards.
 
 HOW IT WORKS
@@ -66,3 +72,13 @@ FILES IT CREATES (in App/Grout/grout/)
   profiles/<name>.save_slots.json   save slot choices
   profiles/<name>.json.bad          only if a profile was unreadable
   Device fields are removed from config.json.
+
+LICENSE AND CREDITS
+  Grout is made by Brandon T. Kowalski and the Grout contributors:
+  https://github.com/rommapp/grout
+  Copyright (c) 2025 Brandon T. Kowalski, Grout Contributors.
+  It is released under the MIT License; the full text is in
+  App/Grout/LICENSE. This build is Grout with a small patch on top, and the
+  patch is released under the same MIT License. Licenses of the libraries
+  built into Grout are in App/Grout/THIRD-PARTY-NOTICES.txt.
+  Source for this build: https://github.com/theycallmeboxy/grout-mosaic-patch

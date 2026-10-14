@@ -6,6 +6,9 @@ name: Profiles overlay
 #
 #   push to a branch (not main)   -> test
 #   push tag v*-profiles          -> test, build, package, publish pre-release
+#
+# The zip also carries Grout's MIT LICENSE (as stock does) and the licenses of
+# the third-party modules linked into the binaries.
 #   workflow_dispatch             -> same for the given tag; dry_run skips publishing
 
 on:
@@ -174,12 +177,48 @@ jobs:
           path: bin
           merge-multiple: true
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Grout's binaries carry these modules' code, and their licenses ask for
+      # the notices to travel with it.
+      - name: Third-party notices
+        run: |
+          set -euo pipefail
+          mkdir -p notices
+          out=notices/THIRD-PARTY-NOTICES.txt
+          for arch in arm64 arm; do
+            GOOS=linux GOARCH=$arch CGO_ENABLED=1 go list -deps \
+              -f '{{if and (not .Standard) .Module (not .Module.Main)}}{{.Module.Path}}@{{.Module.Version}} {{.Module.Dir}}{{end}}' ./app
+          done | sort -u > notices/modules.txt
+          {
+            echo "Third-party software in Grout $VERSION (grout64 and grout32)"
+            echo
+            echo "Grout links the Go modules below. Each is unmodified, and its source"
+            echo "is available at https://pkg.go.dev/<module>@<version>."
+            printf '\n%s\n%s (LICENSE)\n%s\n\n' "$(printf '=%.0s' {1..78})" "Go runtime and standard library, $(go env GOVERSION)" "$(printf '=%.0s' {1..78})"
+            cat "$(go env GOROOT)/LICENSE"
+            while read -r mod dir; do
+              for f in $(find "$dir" -maxdepth 1 -type f \( -iname 'LICEN[CS]E*' -o -iname 'COPYING*' -o -iname 'NOTICE*' \) | sort); do
+                printf '\n%s\n%s (%s)\n%s\n\n' "$(printf '=%.0s' {1..78})" "$mod" "$(basename "$f")" "$(printf '=%.0s' {1..78})"
+                cat "$f"
+              done
+            done < notices/modules.txt
+          } > "$out"
+          # Every linked module must have contributed a license.
+          while read -r mod dir; do grep -qF "$mod (" "$out" || { echo "::error::No license found for $mod"; exit 1; }; done < notices/modules.txt
+          echo "$(wc -l < notices/modules.txt) modules"
+
       - name: Assemble zip
         run: |
           set -euo pipefail
           root=stage
           mkdir -p "$root/App/Grout/grout"
           sed "s/{{VERSION}}/$VERSION/g" .github/profiles/README.txt > "$root/README.txt"
+          install -m 644 LICENSE "$root/App/Grout/LICENSE"
+          install -m 644 notices/THIRD-PARTY-NOTICES.txt "$root/App/Grout/THIRD-PARTY-NOTICES.txt"
           install -m 755 bin/grout-arm64 "$root/App/Grout/grout/grout64"
           install -m 755 bin/grout-arm32 "$root/App/Grout/grout/grout32"
           mkdir -p dist

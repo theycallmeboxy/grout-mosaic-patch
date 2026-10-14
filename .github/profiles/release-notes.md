@@ -13,6 +13,9 @@ Patched Grout **{{VERSION}}** for spruceOS: each handheld sharing one SD card ge
 - Two identical handhelds share a profile. Set `GROUT_PROFILE` on one of them to keep them apart.
 - Off spruce, without `GROUT_PROFILE`, behaviour is the same as stock.
 
-Full notes are in `README.txt` inside the zip. Source: branch [`{{BRANCH}}`](https://github.com/theycallmeboxy/grout/tree/{{BRANCH}}); the same change is attached as a single `.patch`.
+Full notes are in `README.txt` inside the zip. Source: branch [`{{BRANCH}}`](https://github.com/theycallmeboxy/grout-mosaic-patch/tree/{{BRANCH}}); the same change is attached as a single `.patch`.
 
 SHA-256 (zip): `{{SHA256}}`
+
+---
+Unofficial build. It is not made, endorsed or supported by the [Grout](https://github.com/rommapp/grout), [RomM](https://github.com/rommapp/romm) or [spruceOS](https://github.com/spruceUI/spruceOS) projects, so please report problems [here](https://github.com/theycallmeboxy/grout-mosaic-patch/issues) rather than upstream. Grout is © 2025 Brandon T. Kowalski and the Grout contributors and is MIT-licensed; its license ships in the zip as `App/Grout/LICENSE`. The patch is released under the same license.
