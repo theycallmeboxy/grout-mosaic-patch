@@ -4,12 +4,12 @@ Patched Grout **{{VERSION}}** for spruceOS: each handheld sharing one SD card ge
 
 ### Install
 1. You need **stock Grout {{VERSION}}** already on the card. Back up `App/Grout/grout/config.json` and `save_slots.json`.
-2. Extract `grout-profiles-{{VERSION}}.zip` to the SD card root and overwrite when asked. It only replaces `grout64` and `grout32`.
-3. The first device you launch keeps the existing registration. Each other device shows **Register Device** once.
+2. Extract `grout-profiles-{{VERSION}}.zip` to the SD card root and overwrite when asked. It replaces `grout64` and `grout32`, and adds Grout's license and the third-party notices.
+3. The first device you launch keeps the existing registration. Register each other device once in **Settings > Save Sync > Register Device**.
 
 ### Good to know
 - Only use this zip with Grout {{VERSION}}.
-- A Grout update turns the patch off. Every device then shows as unregistered and nothing syncs. Don't register while it's off; copy the matching zip again and everything comes back.
+- A Grout update turns the patch off. Every device then shows as unregistered and nothing syncs. Don't register while it's off. Copying the zip for the new version brings each device's registration back.
 - Two identical handhelds share a profile. Set `GROUT_PROFILE` on one of them to keep them apart.
 - Off spruce, without `GROUT_PROFILE`, behaviour is the same as stock.
 

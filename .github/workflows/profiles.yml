@@ -1,15 +1,16 @@
 name: Profiles overlay
 
-# Fork-only workflow (unique file name so it never collides with upstream on
-# rebase). Builds the per-device-save-profiles patch and ships it as an
-# overlay zip, grout-profiles-<ver>.zip, to extract over stock Grout <ver>.
+# Builds our patched Grout and publishes it as grout-profiles-<ver>.zip, which
+# users extract over stock Grout <ver>. Upstream's workflows are disabled on
+# this fork; this file has its own name so rebasing never conflicts with them.
 #
-#   push to a branch (not main)   -> test
-#   push tag v*-profiles          -> test, build, package, publish pre-release
+#   push to a branch other than main  -> test
+#   push a v*-profiles tag            -> test, build, package, publish pre-release
+#   workflow_dispatch                 -> the same for a given tag; dry_run
+#                                        (the default) skips publishing
 #
-# The zip also carries Grout's MIT LICENSE (as stock does) and the licenses of
-# the third-party modules linked into the binaries.
-#   workflow_dispatch             -> same for the given tag; dry_run skips publishing
+# Besides the binaries, the zip carries Grout's MIT LICENSE, as stock does, and
+# the licenses of the third-party modules linked into the binaries.
 
 on:
   push:
@@ -35,8 +36,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # go.work points at a sibling gabagool checkout that only exists on a
-  # developer's machine. CI builds against the pinned module version.
+  # As in upstream's CI: ignore any go.work and build against the gabagool
+  # version pinned in go.mod.
   GOWORK: "off"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -93,7 +94,8 @@ jobs:
           esac
           VERSION="${TAG%-profiles}"
           PAK=$(jq -r .version pak.json)
-          # An overlay built for the wrong Grout version breaks devices.
+          # The zip only replaces the binaries, so they have to match the stock
+          # launch.sh and libraries of the same Grout version.
           if [ "$VERSION" != "$PAK" ]; then
             echo "::error::Tag version '$VERSION' does not match pak.json version '$PAK'"
             exit 1

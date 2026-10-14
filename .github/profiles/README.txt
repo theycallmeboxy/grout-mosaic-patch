@@ -27,25 +27,27 @@ INSTALL
 HOW IT WORKS
   The profile name is the GROUT_PROFILE environment variable if set.
   Otherwise it is spruce's PLATFORM (Brick, SmartPro, Flip, A30, Pixel2...).
+  Only letters, digits, "-" and "_" are kept from the name.
   Off spruce and without GROUT_PROFILE, nothing changes.
 
 FIRST LAUNCH ON EACH DEVICE
   - The first device you launch keeps the card's existing registration,
     save-folder mappings and slot choices. They move into its profile.
   - Every other device starts unregistered, with default folders and slots.
-    It shows the normal "Register Device" prompt once. Register it there.
+    Register it once in Settings > Save Sync > Register Device.
   - Hosts, credentials and other settings stay shared in config.json.
   - Pairing login (QR / approve on server) gives each device its own pairing
     identity. The token is still shared.
-  - Save scan only reads this device's chosen core folder per system, under
-    /mnt/SDCARD/Saves/saves/<CoreName>/.
+  - Where a system has several core folders under
+    /mnt/SDCARD/Saves/saves/<CoreName>/, the save scan only reads the one
+    this device uses.
 
 AFTER A GROUT UPDATE
-  An update puts the stock binaries back. Then every device shows as
-  unregistered and Save Sync is hidden. Nothing syncs. This is safe.
-  Copy the matching patched zip again and everything returns from profiles/.
-  Do not register in stock Grout meanwhile. It adds an extra RomM device.
-  It is harmless, but it clutters the server.
+  An update puts the stock binaries back. Every device then shows as
+  unregistered, Save Sync is hidden and nothing syncs. Copy the patched zip
+  for the new version over it, and each device's registration and settings
+  are read from profiles/ again. Don't register in stock Grout meanwhile:
+  that adds an extra device on the RomM server.
 
 UNINSTALL / BACK TO STOCK
   Restore the stock grout64 and grout32 (reinstall Grout). Stock Grout
