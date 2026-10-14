@@ -200,7 +200,7 @@ jobs:
             echo
             echo "Grout links the Go modules below. Each is unmodified, and its source"
             echo "is available at https://pkg.go.dev/<module>@<version>."
-            printf '\n%s\n%s (LICENSE)\n%s\n\n' "$(printf '=%.0s' {1..78})" "Go runtime and standard library, $(go env GOVERSION)" "$(printf '=%.0s' {1..78})"
+            printf '\n%s\n%s (LICENSE)\n%s\n\n' "$(printf '=%.0s' {1..78})" "Go runtime and standard library, $(go version bin/grout-arm64 | cut -d' ' -f2)" "$(printf '=%.0s' {1..78})"
             cat "$(go env GOROOT)/LICENSE"
             while read -r mod dir; do
               for f in $(find "$dir" -maxdepth 1 -type f \( -iname 'LICEN[CS]E*' -o -iname 'COPYING*' -o -iname 'NOTICE*' \) | sort); do
