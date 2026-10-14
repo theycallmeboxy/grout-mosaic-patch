@@ -794,6 +794,7 @@ func ScanSaves(config *settings.Config) []LocalSave {
 		if config != nil {
 			rommFSSlug = config.ResolveRommFSSlug(fsSlug)
 		}
+		emulatorDirs = deviceSaveFolders(config, rommFSSlug, emulatorDirs)
 
 		for _, emuDir := range emulatorDirs {
 			saveDir := filepath.Join(baseSavePath, emuDir)

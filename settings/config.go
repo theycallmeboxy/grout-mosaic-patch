@@ -191,6 +191,7 @@ func LoadConfigFrom(path string) (*Config, error) {
 	}
 
 	applyDefaults(&config)
+	applyProfile(&config, path)
 	config.SlotPreferences = loadSlotPreferencesFrom(slotPreferencesPathFor(path))
 
 	return &config, nil
@@ -206,7 +207,12 @@ func SaveConfig(config *Config) error {
 func SaveConfigTo(config *Config, path string) error {
 	applyDefaults(config)
 
-	pretty, err := json.MarshalIndent(config, "", "  ")
+	shared, err := splitProfile(config, path)
+	if err != nil {
+		return fmt.Errorf("writing device profile: %w", err)
+	}
+
+	pretty, err := json.MarshalIndent(shared, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding %s: %w", path, err)
 	}
@@ -270,11 +276,14 @@ const SlotPreferencesFileName = "save_slots.json"
 
 // slotPreferencesPathFor puts the slot file beside the config it belongs to.
 func slotPreferencesPathFor(configPath string) string {
+	if path := profileSlotPreferencesPath(configPath); path != "" {
+		return path
+	}
 	return filepath.Join(filepath.Dir(configPath), SlotPreferencesFileName)
 }
 
 func LoadSlotPreferences() map[string]string {
-	return loadSlotPreferencesFrom(SlotPreferencesFileName)
+	return loadSlotPreferencesFrom(slotPreferencesPathFor(ConfigFileName))
 }
 
 func loadSlotPreferencesFrom(path string) map[string]string {
@@ -290,7 +299,7 @@ func loadSlotPreferencesFrom(path string) map[string]string {
 }
 
 func SaveSlotPreferences(config *Config) error {
-	return SaveSlotPreferencesTo(config, SlotPreferencesFileName)
+	return SaveSlotPreferencesTo(config, slotPreferencesPathFor(ConfigFileName))
 }
 
 // SaveSlotPreferencesTo writes the slot choices to path, removing the file when
