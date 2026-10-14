@@ -1,5 +1,6 @@
-Grout per-device profiles (patched build for Grout {{VERSION}})
-=============================================================
+grout-mosaic-patch {{RELEASE}}
+Patched build of Grout {{VERSION}} for spruceOS: per-device save profiles
+==========================================================================
 
 WHAT THIS IS
   One spruceOS SD card often moves between several handhelds. Each one may

@@ -1,11 +1,12 @@
-name: Profiles overlay
+name: Release
 
-# Builds our patched Grout and publishes it as grout-profiles-<ver>.zip, which
-# users extract over stock Grout <ver>. Upstream's workflows are disabled on
+# Builds our patched Grout and publishes it as grout-mosaic-patch-<ver>.<n>.zip,
+# which users extract over stock Grout <ver>. <n> is our own revision for that
+# Grout version, starting at 0. Upstream's workflows are disabled on
 # this fork; this file has its own name so rebasing never conflicts with them.
 #
 #   push to a branch other than main  -> test
-#   push a v*-profiles tag            -> test, build, package, publish pre-release
+#   push a grout-mosaic-patch-v* tag  -> test, build, package, publish pre-release
 #   workflow_dispatch                 -> the same for a given tag; dry_run
 #                                        (the default) skips publishing
 #
@@ -15,11 +16,11 @@ name: Profiles overlay
 on:
   push:
     branches-ignore: [main]
-    tags: ['v*-profiles']
+    tags: ['grout-mosaic-patch-v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to build (e.g. v5.3.1.4-profiles)'
+        description: 'Release tag to build (e.g. grout-mosaic-patch-v5.3.1.4.0)'
         required: true
         type: string
       dry_run:
@@ -32,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: profiles-${{ inputs.tag || github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -78,6 +79,7 @@ jobs:
     outputs:
       tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,11 +90,13 @@ jobs:
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          case "$TAG" in
-            v*-profiles) ;;
-            *) echo "::error::Tag '$TAG' does not match v*-profiles"; exit 1 ;;
-          esac
-          VERSION="${TAG%-profiles}"
+          # grout-mosaic-patch-v5.3.1.4.0 is revision 0 for Grout v5.3.1.4.
+          if ! echo "$TAG" | grep -Eq '^grout-mosaic-patch-v[0-9]+(\.[0-9]+)*\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' is not grout-mosaic-patch-v<Grout version>.<revision>"
+            exit 1
+          fi
+          RELEASE="${TAG#grout-mosaic-patch-}"
+          VERSION="${RELEASE%.*}"
           PAK=$(jq -r .version pak.json)
           # The zip only replaces the binaries, so they have to match the stock
           # launch.sh and libraries of the same Grout version.
@@ -102,6 +106,7 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.name }}
@@ -138,13 +143,13 @@ jobs:
             --platform=${{ matrix.platform }} \
             --build-arg GITHUB_ACTIONS=false \
             --build-arg GROUT_VERSION="$GROUT_VERSION" \
-            -t grout-profiles:${{ matrix.name }} \
+            -t grout-mosaic-patch:${{ matrix.name }} \
             -f ${{ matrix.dockerfile }} .
 
       - name: Extract binary
         run: |
           mkdir -p out
-          ctr=$(docker create --platform=${{ matrix.platform }} grout-profiles:${{ matrix.name }})
+          ctr=$(docker create --platform=${{ matrix.platform }} grout-mosaic-patch:${{ matrix.name }})
           docker cp "$ctr:/build/grout" "out/grout-${{ matrix.name }}"
           docker rm "$ctr"
           file "out/grout-${{ matrix.name }}" || true
@@ -165,6 +170,7 @@ jobs:
     env:
       TAG: ${{ needs.version.outputs.tag }}
       VERSION: ${{ needs.version.outputs.version }}
+      RELEASE: ${{ needs.version.outputs.release }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -218,13 +224,13 @@ jobs:
           set -euo pipefail
           root=stage
           mkdir -p "$root/App/Grout/grout"
-          sed "s/{{VERSION}}/$VERSION/g" .github/profiles/README.txt > "$root/README.txt"
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{RELEASE}}/$RELEASE/g" .github/profiles/README.txt > "$root/README.txt"
           install -m 644 LICENSE "$root/App/Grout/LICENSE"
           install -m 644 notices/THIRD-PARTY-NOTICES.txt "$root/App/Grout/THIRD-PARTY-NOTICES.txt"
           install -m 755 bin/grout-arm64 "$root/App/Grout/grout/grout64"
           install -m 755 bin/grout-arm32 "$root/App/Grout/grout/grout32"
           mkdir -p dist
-          ZIP="grout-profiles-$VERSION.zip"
+          ZIP="grout-mosaic-patch-$RELEASE.zip"
           (cd "$root" && zip -X -r "../dist/$ZIP" README.txt App)
           (cd dist && sha256sum "$ZIP" > "$ZIP.sha256")
           unzip -Z dist/"$ZIP"
@@ -238,14 +244,14 @@ jobs:
           # The fork carries no upstream tags; take the release tag from upstream.
           git rev-parse --verify -q "refs/tags/$BASE" >/dev/null ||
             git fetch --no-tags https://github.com/rommapp/grout.git "refs/tags/$BASE:refs/tags/$BASE"
-          git format-patch --stdout "$BASE"..HEAD -- . ':!.github' > "dist/grout-profiles-$VERSION.patch"
-          test -s "dist/grout-profiles-$VERSION.patch"
+          git format-patch --stdout "$BASE"..HEAD -- . ':!.github' > "dist/grout-mosaic-patch-$RELEASE.patch"
+          test -s "dist/grout-mosaic-patch-$RELEASE.patch"
 
       - name: Upload workflow artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: grout-profiles-${{ needs.version.outputs.version }}
+          name: grout-mosaic-patch-${{ needs.version.outputs.release }}
           path: dist/*
           if-no-files-found: warn
 
@@ -254,8 +260,8 @@ jobs:
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
           set -euo pipefail
-          ZIP="grout-profiles-$VERSION.zip"
-          files=("dist/$ZIP" "dist/$ZIP.sha256" "dist/grout-profiles-$VERSION.patch")
+          ZIP="grout-mosaic-patch-$RELEASE.zip"
+          files=("dist/$ZIP" "dist/$ZIP.sha256" "dist/grout-mosaic-patch-$RELEASE.patch")
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${files[@]}" --clobber
           else
@@ -263,9 +269,9 @@ jobs:
             BRANCH=$(git branch -r --contains HEAD --format='%(refname:lstrip=3)' \
               | grep -vE '^(main|HEAD)$' | head -n1 || true)
             BRANCH=${BRANCH:-per-device-save-profiles}
-            sed -e "s|{{VERSION}}|$VERSION|g" -e "s|{{SHA256}}|$SHA256|g" \
+            sed -e "s|{{VERSION}}|$VERSION|g" -e "s|{{RELEASE}}|$RELEASE|g" -e "s|{{SHA256}}|$SHA256|g" \
                 -e "s|{{BRANCH}}|$BRANCH|g" .github/profiles/release-notes.md > notes.md
             gh release create "$TAG" "${files[@]}" --prerelease \
-              --title "Grout $VERSION + per-device save profiles (spruce)" \
+              --title "grout-mosaic-patch-$RELEASE" \
               --notes-file notes.md
           fi

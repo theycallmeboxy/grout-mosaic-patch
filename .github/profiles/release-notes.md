@@ -1,10 +1,10 @@
-Patched Grout **{{VERSION}}** for spruceOS: each handheld sharing one SD card gets its own save-sync settings. That means its own RomM device registration, its own save-folder (core) mapping and its own save-slot choices. Without this, a Brick on mGBA and a Flip on gpSP would sync as one device.
+Patched build of Grout **{{VERSION}}** for spruceOS: each handheld sharing one SD card gets its own save-sync settings. That means its own RomM device registration, its own save-folder (core) mapping and its own save-slot choices. Without this, a Brick on mGBA and a Flip on gpSP would sync as one device.
 
 > **Pre-release:** builds and unit tests pass, but this hasn't been tested on hardware yet.
 
 ### Install
 1. You need **stock Grout {{VERSION}}** already on the card. Back up `App/Grout/grout/config.json` and `save_slots.json`.
-2. Extract `grout-profiles-{{VERSION}}.zip` to the SD card root and overwrite when asked. It replaces `grout64` and `grout32`, and adds Grout's license and the third-party notices.
+2. Extract `grout-mosaic-patch-{{RELEASE}}.zip` to the SD card root and overwrite when asked. It replaces `grout64` and `grout32`, and adds Grout's license and the third-party notices.
 3. The first device you launch keeps the existing registration. Register each other device once in **Settings > Save Sync > Register Device**.
 
 ### Good to know
