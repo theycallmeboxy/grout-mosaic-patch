@@ -1,0 +1,230 @@
+name: Profiles overlay
+
+# Fork-only workflow (unique file name so it never collides with upstream on
+# rebase). Builds the per-device-save-profiles patch and ships it as an
+# overlay zip, grout-profiles-<ver>.zip, to extract over stock Grout <ver>.
+#
+#   push to a branch (not main)   -> test
+#   push tag v*-profiles          -> test, build, package, publish pre-release
+#   workflow_dispatch             -> same for the given tag; dry_run skips publishing
+
+on:
+  push:
+    branches-ignore: [main]
+    tags: ['v*-profiles']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v5.3.1.4-profiles)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build and upload the workflow artifact only; do not touch the release'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profiles-${{ inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # go.work points at a sibling gabagool checkout that only exists on a
+  # developer's machine. CI builds against the pinned module version.
+  GOWORK: "off"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install SDL2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libsdl2-dev libsdl2-ttf-dev libsdl2-gfx-dev libsdl2-image-dev
+
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  version:
+    name: Resolve version
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Derive version and check it against pak.json
+        id: v
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          case "$TAG" in
+            v*-profiles) ;;
+            *) echo "::error::Tag '$TAG' does not match v*-profiles"; exit 1 ;;
+          esac
+          VERSION="${TAG%-profiles}"
+          PAK=$(jq -r .version pak.json)
+          # An overlay built for the wrong Grout version breaks devices.
+          if [ "$VERSION" != "$PAK" ]; then
+            echo "::error::Tag version '$VERSION' does not match pak.json version '$PAK'"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: version
+    runs-on: ubuntu-22.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: arm64
+            platform: linux/arm64
+            dockerfile: docker/Dockerfile
+          - name: arm32
+            platform: linux/arm/v7
+            dockerfile: docker/32.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # arm/v7 images run under emulation on the arm64 runner, as in upstream.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        env:
+          GROUT_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          docker buildx build --load \
+            --platform=${{ matrix.platform }} \
+            --build-arg GITHUB_ACTIONS=false \
+            --build-arg GROUT_VERSION="$GROUT_VERSION" \
+            -t grout-profiles:${{ matrix.name }} \
+            -f ${{ matrix.dockerfile }} .
+
+      - name: Extract binary
+        run: |
+          mkdir -p out
+          ctr=$(docker create --platform=${{ matrix.platform }} grout-profiles:${{ matrix.name }})
+          docker cp "$ctr:/build/grout" "out/grout-${{ matrix.name }}"
+          docker rm "$ctr"
+          file "out/grout-${{ matrix.name }}" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grout-${{ matrix.name }}
+          path: out/grout-${{ matrix.name }}
+          if-no-files-found: error
+
+  package:
+    name: Package and release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: grout-*
+          path: bin
+          merge-multiple: true
+
+      - name: Assemble zip
+        run: |
+          set -euo pipefail
+          root=stage
+          mkdir -p "$root/App/Grout/grout"
+          sed "s/{{VERSION}}/$VERSION/g" .github/profiles/README.txt > "$root/README.txt"
+          install -m 755 bin/grout-arm64 "$root/App/Grout/grout/grout64"
+          install -m 755 bin/grout-arm32 "$root/App/Grout/grout/grout32"
+          mkdir -p dist
+          ZIP="grout-profiles-$VERSION.zip"
+          (cd "$root" && zip -X -r "../dist/$ZIP" README.txt App)
+          (cd dist && sha256sum "$ZIP" > "$ZIP.sha256")
+          unzip -Z dist/"$ZIP"
+          cat "dist/$ZIP.sha256"
+
+      - name: Generate patch
+        run: |
+          set -euo pipefail
+          # Patch commits only (upstream tag..HEAD), without CI files.
+          BASE=$(jq -r .version pak.json)
+          # The fork carries no upstream tags; take the release tag from upstream.
+          git rev-parse --verify -q "refs/tags/$BASE" >/dev/null ||
+            git fetch --no-tags https://github.com/rommapp/grout.git "refs/tags/$BASE:refs/tags/$BASE"
+          git format-patch --stdout "$BASE"..HEAD -- . ':!.github' > "dist/grout-profiles-$VERSION.patch"
+          test -s "dist/grout-profiles-$VERSION.patch"
+
+      - name: Upload workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grout-profiles-${{ needs.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: warn
+
+      - name: Publish release
+        # Tag pushes are never dry runs.
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: |
+          set -euo pipefail
+          ZIP="grout-profiles-$VERSION.zip"
+          files=("dist/$ZIP" "dist/$ZIP.sha256" "dist/grout-profiles-$VERSION.patch")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            SHA256=$(cut -d' ' -f1 "dist/$ZIP.sha256")
+            BRANCH=$(git branch -r --contains HEAD --format='%(refname:lstrip=3)' \
+              | grep -vE '^(main|HEAD)$' | head -n1 || true)
+            BRANCH=${BRANCH:-per-device-save-profiles}
+            sed -e "s|{{VERSION}}|$VERSION|g" -e "s|{{SHA256}}|$SHA256|g" \
+                -e "s|{{BRANCH}}|$BRANCH|g" .github/profiles/release-notes.md > notes.md
+            gh release create "$TAG" "${files[@]}" --prerelease \
+              --title "Grout $VERSION + per-device save profiles (spruce)" \
+              --notes-file notes.md
+          fi
